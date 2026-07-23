@@ -248,19 +248,24 @@
 </div>
 
 <div id="errorBanner" style="display:none;position:fixed;top:0;left:0;right:0;background:#9c3f1f;color:#fff;padding:12px 16px;font-family:Arial,sans-serif;font-size:13px;z-index:2000;"></div>
-<script src="clientes.js"></script>
 <script>
-window.addEventListener('error', function(e){
+// URL da API Go. Em desenvolvimento local aponta pro servidor rodando na
+// máquina; depois do deploy no Render, troca pela URL pública (ex:
+// https://mapa-clientes-api.onrender.com).
+const API_BASE_URL = 'http://localhost:8080';
+
+function showError(msg){
   var b = document.getElementById('errorBanner');
   b.style.display = 'block';
-  b.textContent = 'Deu erro ao carregar o mapa: ' + (e.message || 'erro desconhecido') + '. Tenta abrir de novo ou checar a internet.';
+  b.textContent = msg;
+}
+
+window.addEventListener('error', function(e){
+  showError('Deu erro ao carregar o mapa: ' + (e.message || 'erro desconhecido') + '. Tenta abrir de novo ou checar a internet.');
 });
 
-// CLIENTES vem de clientes.js (carregado antes deste script)
-
 if (typeof L === 'undefined') {
-  document.getElementById('errorBanner').style.display = 'block';
-  document.getElementById('errorBanner').textContent = 'A biblioteca do mapa não carregou. Tenta abrir o arquivo em outro navegador (Chrome/Safari).';
+  showError('A biblioteca do mapa não carregou. Tenta abrir o arquivo em outro navegador (Chrome/Safari).');
   throw new Error('Leaflet não carregado');
 }
 
@@ -269,6 +274,14 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
+
+async function carregarClientes(){
+  const resp = await fetch(API_BASE_URL + '/clientes');
+  if (!resp.ok) {
+    throw new Error('API retornou status ' + resp.status);
+  }
+  return resp.json();
+}
 
 function pinIcon(kind){
   // kind: 'ok' | 'aprox'
@@ -288,34 +301,37 @@ function wazeAddrUrl(addr){
   return 'https://waze.com/ul?q=' + encodeURIComponent(addr) + '&navigate=yes';
 }
 
+let CLIENTES = [];
 const markers = [];
 const bounds = [];
 
-CLIENTES.forEach((c, idx) => {
-  c._idx = idx;
-  if (c.lat && c.lon) {
-    const marker = L.marker([c.lat, c.lon], { icon: pinIcon(c.aproximado ? 'aprox' : 'ok') });
-    const wazeUrl = wazeCoordUrl(c.lat, c.lon);
-    const avisoAprox = c.aproximado
-      ? '<div class="popup-aprox-note">📍 Localização aproximada (achei a rua, não o número exato)</div>'
-      : '';
-    marker.bindPopup(
-      '<div class="popup-name">' + escapeHtml(c.nome) + '</div>' +
-      '<div class="popup-addr">' + escapeHtml(c.endereco) + '</div>' +
-      avisoAprox +
-      '<a class="popup-waze" href="' + wazeUrl + '" target="_blank" rel="noopener">Abrir no Waze →</a>'
-    );
-    marker.on('click', () => setActive(idx));
-    marker.addTo(map);
-    markers[idx] = marker;
-    bounds.push([c.lat, c.lon]);
-  } else {
-    markers[idx] = null;
-  }
-});
+function montarMarcadores(){
+  CLIENTES.forEach((c, idx) => {
+    c._idx = idx;
+    if (c.lat && c.lon) {
+      const marker = L.marker([c.lat, c.lon], { icon: pinIcon(c.aproximado ? 'aprox' : 'ok') });
+      const wazeUrl = wazeCoordUrl(c.lat, c.lon);
+      const avisoAprox = c.aproximado
+        ? '<div class="popup-aprox-note">📍 Localização aproximada (achei a rua, não o número exato)</div>'
+        : '';
+      marker.bindPopup(
+        '<div class="popup-name">' + escapeHtml(c.nome) + '</div>' +
+        '<div class="popup-addr">' + escapeHtml(c.endereco) + '</div>' +
+        avisoAprox +
+        '<a class="popup-waze" href="' + wazeUrl + '" target="_blank" rel="noopener">Abrir no Waze →</a>'
+      );
+      marker.on('click', () => setActive(idx));
+      marker.addTo(map);
+      markers[idx] = marker;
+      bounds.push([c.lat, c.lon]);
+    } else {
+      markers[idx] = null;
+    }
+  });
 
-if (bounds.length) {
-  map.fitBounds(bounds, { padding: [30,30] });
+  if (bounds.length) {
+    map.fitBounds(bounds, { padding: [30,30] });
+  }
 }
 
 function escapeHtml(s){
@@ -369,11 +385,21 @@ function setActive(idx){
 }
 
 searchInput.addEventListener('input', (e) => renderList(e.target.value));
-renderList('');
 
 document.getElementById('toggleSidebar').addEventListener('click', () => {
   document.getElementById('sidebar').classList.toggle('open');
 });
+
+(async function init(){
+  try {
+    CLIENTES = await carregarClientes();
+  } catch (err) {
+    showError('Não consegui carregar os clientes da API (' + API_BASE_URL + '): ' + err.message);
+    return;
+  }
+  montarMarcadores();
+  renderList('');
+})();
 </script>
 </body>
 </html>
