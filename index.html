@@ -341,10 +341,8 @@
 
 <div id="errorBanner" style="display:none;position:fixed;top:0;left:0;right:0;background:#9c3f1f;color:#fff;padding:12px 16px;font-family:Arial,sans-serif;font-size:13px;z-index:2000;"></div>
 <script>
-// URL da API Go. Em desenvolvimento local aponta pro servidor rodando na
-// máquina; depois do deploy no Render, troca pela URL pública (ex:
-// https://mapa-clientes-api.onrender.com).
-const API_BASE_URL = 'http://localhost:8080';
+// URL da API Go, ja publicada no Render.
+const API_BASE_URL = 'https://mapa-clientes-n184.onrender.com';
 
 function showError(msg){
   var b = document.getElementById('errorBanner');
