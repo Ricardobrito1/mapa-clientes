@@ -37,6 +37,7 @@ func main() {
 	mux.HandleFunc("GET /clientes", handleLista(db))
 	mux.HandleFunc("GET /clientes/busca", handleBusca(db))
 	mux.HandleFunc("POST /clientes", handleCadastro(db))
+	mux.HandleFunc("PUT /clientes/{codigo}", handleEdita(db))
 	mux.HandleFunc("DELETE /clientes/{codigo}", handleDeleta(db))
 
 	port := os.Getenv("PORT")
@@ -98,6 +99,66 @@ func handleBusca(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, clientes)
+	}
+}
+
+type editaClienteRequest struct {
+	Nome       *string  `json:"nome,omitempty"`
+	Endereco   *string  `json:"endereco,omitempty"`
+	Lat        *float64 `json:"lat,omitempty"`
+	Lon        *float64 `json:"lon,omitempty"`
+	Aproximado *bool    `json:"aproximado,omitempty"`
+}
+
+func handleEdita(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		codigo, err := strconv.Atoi(r.PathValue("codigo"))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"erro": "codigo invalido"})
+			return
+		}
+
+		existente, ok, err := core.ClientePorCodigo(db, codigo)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"erro": err.Error()})
+			return
+		}
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"erro": "cliente nao encontrado"})
+			return
+		}
+
+		var req editaClienteRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"erro": "json invalido"})
+			return
+		}
+		if (req.Lat != nil) != (req.Lon != nil) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"erro": "lat e lon devem ser enviados juntos"})
+			return
+		}
+
+		if req.Nome != nil {
+			existente.Nome = strings.ToUpper(strings.TrimSpace(*req.Nome))
+		}
+		if req.Endereco != nil {
+			existente.Endereco = strings.ToUpper(strings.TrimSpace(*req.Endereco))
+		}
+		if req.Lat != nil && req.Lon != nil {
+			existente.Lat = *req.Lat
+			existente.Lon = *req.Lon
+			existente.Aproximado = false
+		}
+		if req.Aproximado != nil {
+			existente.Aproximado = *req.Aproximado
+		}
+
+		if err := core.UpsertCliente(db, existente); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"erro": err.Error()})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, existente)
 	}
 }
 

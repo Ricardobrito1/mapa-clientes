@@ -44,6 +44,27 @@ func scanClientes(rows *sql.Rows) ([]Cliente, error) {
 	return clientes, rows.Err()
 }
 
+// ClientePorCodigo busca um unico cliente pelo codigo (PK). ok=false se nao existir.
+func ClientePorCodigo(db *sql.DB, codigo int) (Cliente, bool, error) {
+	rows, err := db.Query(
+		`SELECT codigo, nome, endereco, cep, bairro, lat, lon, aproximado FROM clientes WHERE codigo = ?`,
+		codigo,
+	)
+	if err != nil {
+		return Cliente{}, false, err
+	}
+	defer rows.Close()
+
+	clientes, err := scanClientes(rows)
+	if err != nil {
+		return Cliente{}, false, err
+	}
+	if len(clientes) == 0 {
+		return Cliente{}, false, nil
+	}
+	return clientes[0], true, nil
+}
+
 func ProximoCodigo(db *sql.DB) (int, error) {
 	var max sql.NullInt64
 	err := db.QueryRow(`SELECT MAX(codigo) FROM clientes`).Scan(&max)

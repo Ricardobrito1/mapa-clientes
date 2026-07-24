@@ -184,6 +184,19 @@
     font-weight:700;
   }
   .popup-waze:hover{background:var(--pin-dark);}
+  .popup-editar{
+    display:block;
+    margin-top:6px;
+    background:none;
+    border:none;
+    color:var(--brand-orange);
+    font-size:11px;
+    font-family:Arial, sans-serif;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+  }
+  .popup-editar:hover{color:var(--brand-red);}
   .popup-excluir{
     display:block;
     margin-top:6px;
@@ -437,6 +450,7 @@ function criarMarcador(c, idx){
     '<div class="popup-addr">' + escapeHtml(c.endereco) + '</div>' +
     avisoAprox +
     '<a class="popup-waze" href="' + wazeUrl + '" target="_blank" rel="noopener">Abrir no Waze →</a>' +
+    '<button class="popup-editar" onclick="editarLocalizacao(' + c.codigo + ', ' + c.lat + ', ' + c.lon + ')">Corrigir localização</button>' +
     '<button class="popup-excluir" onclick="excluirCliente(' + c.codigo + ', \'' + escapeHtml(c.nome).replace(/'/g, "\\'") + '\')">Excluir cliente</button>'
   );
   marker.on('click', () => setActive(idx));
@@ -478,6 +492,43 @@ async function excluirCliente(codigo, nome){
   montarMarcadores(false);
   document.getElementById('totalCount').textContent = CLIENTES.length;
   document.getElementById('subtitle').textContent = CLIENTES.length + ' clientes carregados';
+  renderList(searchInput.value);
+}
+
+async function editarLocalizacao(codigo, latAtual, lonAtual){
+  const novaLatStr = prompt('Nova latitude (ex: pegar do Google Maps):', latAtual);
+  if (novaLatStr === null) return;
+  const novaLonStr = prompt('Nova longitude:', lonAtual);
+  if (novaLonStr === null) return;
+
+  const lat = parseFloat(novaLatStr.replace(',', '.'));
+  const lon = parseFloat(novaLonStr.replace(',', '.'));
+  if (isNaN(lat) || isNaN(lon)) {
+    alert('Latitude/longitude inválidas.');
+    return;
+  }
+
+  let atualizado;
+  try {
+    const resp = await fetch(API_BASE_URL + '/clientes/' + codigo, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lon })
+    });
+    if (!resp.ok) throw new Error('status ' + resp.status);
+    atualizado = await resp.json();
+  } catch (err) {
+    alert('Não consegui atualizar: ' + err.message);
+    return;
+  }
+
+  const idx = CLIENTES.findIndex(c => c.codigo === codigo);
+  if (idx === -1) return;
+  atualizado._idx = idx;
+  CLIENTES[idx] = atualizado;
+  if (markers[idx]) map.removeLayer(markers[idx]);
+  criarMarcador(atualizado, idx);
+  map.flyTo([atualizado.lat, atualizado.lon], 16, { duration: 0.6 });
   renderList(searchInput.value);
 }
 
