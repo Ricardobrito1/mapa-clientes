@@ -65,6 +65,20 @@ func InsereCliente(db *sql.DB, c Cliente) error {
 	return err
 }
 
+// DeletaCliente remove um cliente pelo codigo. Retorna ok=false se nao
+// existia nenhum cliente com esse codigo.
+func DeletaCliente(db *sql.DB, codigo int) (ok bool, err error) {
+	res, err := db.Exec(`DELETE FROM clientes WHERE codigo = ?`, codigo)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // UpsertCliente insere ou substitui um cliente pelo codigo (PK).
 // Usado pela importacao em lote, que pode ser rodada mais de uma vez sem erro.
 func UpsertCliente(db *sql.DB, c Cliente) error {

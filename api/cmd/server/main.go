@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -36,6 +37,7 @@ func main() {
 	mux.HandleFunc("GET /clientes", handleLista(db))
 	mux.HandleFunc("GET /clientes/busca", handleBusca(db))
 	mux.HandleFunc("POST /clientes", handleCadastro(db))
+	mux.HandleFunc("DELETE /clientes/{codigo}", handleDeleta(db))
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -96,6 +98,26 @@ func handleBusca(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, clientes)
+	}
+}
+
+func handleDeleta(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		codigo, err := strconv.Atoi(r.PathValue("codigo"))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"erro": "codigo invalido"})
+			return
+		}
+		ok, err := core.DeletaCliente(db, codigo)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"erro": err.Error()})
+			return
+		}
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"erro": "cliente nao encontrado"})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

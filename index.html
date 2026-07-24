@@ -184,6 +184,33 @@
     font-weight:700;
   }
   .popup-waze:hover{background:var(--pin-dark);}
+  .popup-excluir{
+    display:block;
+    margin-top:6px;
+    background:none;
+    border:none;
+    color:#9c3f1f;
+    font-size:11px;
+    font-family:Arial, sans-serif;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+  }
+  .popup-excluir:hover{color:#7a1010;}
+  .client-excluir{
+    display:inline-block;
+    margin-top:6px;
+    margin-left:8px;
+    background:none;
+    border:none;
+    color:#9c3f1f;
+    font-size:11px;
+    font-family:Arial, sans-serif;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+  }
+  .client-excluir:hover{color:#7a1010;}
 
   /* Mobile toggle */
   #toggleSidebar{
@@ -409,7 +436,8 @@ function criarMarcador(c, idx){
     '<div class="popup-name">' + escapeHtml(c.nome) + '</div>' +
     '<div class="popup-addr">' + escapeHtml(c.endereco) + '</div>' +
     avisoAprox +
-    '<a class="popup-waze" href="' + wazeUrl + '" target="_blank" rel="noopener">Abrir no Waze →</a>'
+    '<a class="popup-waze" href="' + wazeUrl + '" target="_blank" rel="noopener">Abrir no Waze →</a>' +
+    '<button class="popup-excluir" onclick="excluirCliente(' + c.codigo + ', \'' + escapeHtml(c.nome).replace(/'/g, "\\'") + '\')">Excluir cliente</button>'
   );
   marker.on('click', () => setActive(idx));
   marker.addTo(map);
@@ -417,15 +445,40 @@ function criarMarcador(c, idx){
   bounds.push([c.lat, c.lon]);
 }
 
-function montarMarcadores(){
+function montarMarcadores(ajustarView){
   CLIENTES.forEach((c, idx) => {
     c._idx = idx;
     criarMarcador(c, idx);
   });
 
-  if (bounds.length) {
+  if (ajustarView !== false && bounds.length) {
     map.fitBounds(bounds, { padding: [30,30] });
   }
+}
+
+async function excluirCliente(codigo, nome){
+  if (!confirm('Excluir "' + nome + '" do mapa? Essa ação não pode ser desfeita.')) {
+    return;
+  }
+  try {
+    const resp = await fetch(API_BASE_URL + '/clientes/' + codigo, { method: 'DELETE' });
+    if (!resp.ok && resp.status !== 204) {
+      throw new Error('status ' + resp.status);
+    }
+  } catch (err) {
+    alert('Não consegui excluir: ' + err.message);
+    return;
+  }
+
+  map.closePopup();
+  markers.forEach(m => { if (m) map.removeLayer(m); });
+  markers.length = 0;
+  bounds.length = 0;
+  CLIENTES = CLIENTES.filter(c => c.codigo !== codigo);
+  montarMarcadores(false);
+  document.getElementById('totalCount').textContent = CLIENTES.length;
+  document.getElementById('subtitle').textContent = CLIENTES.length + ' clientes carregados';
+  renderList(searchInput.value);
 }
 
 function adicionarClienteAoMapa(c){
@@ -470,6 +523,7 @@ function renderList(filter){
       inner += '<div class="no-coord-badge">Não encontrei no mapa</div><br/>' +
                '<a class="waze-mini" href="' + wazeAddrUrl(c.endereco) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">Abrir no Waze →</a>';
     }
+    inner += '<button class="client-excluir" onclick="event.stopPropagation(); excluirCliente(' + c.codigo + ', \'' + escapeHtml(c.nome).replace(/'/g, "\\'") + '\')">Excluir</button>';
     card.innerHTML = inner;
     card.addEventListener('click', () => {
       if (c.lat && c.lon) {
