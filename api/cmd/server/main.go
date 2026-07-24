@@ -29,6 +29,10 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
 	mux.HandleFunc("GET /clientes", handleLista(db))
 	mux.HandleFunc("GET /clientes/busca", handleBusca(db))
 	mux.HandleFunc("POST /clientes", handleCadastro(db))
