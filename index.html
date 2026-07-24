@@ -232,7 +232,7 @@
   <aside id="sidebar" class="open">
     <header>
       <h1>Mapa de Clientes</h1>
-      <p id="subtitle">148 clientes carregados</p>
+      <p id="subtitle">Carregando clientes...</p>
     </header>
     <div id="searchBox">
       <input id="searchInput" type="text" placeholder="Buscar por nome ou bairro..." />
@@ -241,7 +241,7 @@
       <span><span class="dot ok"></span>Localização confirmada</span>
       <span><span class="dot aprox"></span>Aproximada (rua certa)</span>
     </div>
-    <div id="countLine">Mostrando <span id="shownCount">148</span> de 148</div>
+    <div id="countLine">Mostrando <span id="shownCount">0</span> de <span id="totalCount">0</span></div>
     <div id="list"></div>
   </aside>
   <div id="map"></div>
@@ -397,6 +397,8 @@ document.getElementById('toggleSidebar').addEventListener('click', () => {
     showError('Não consegui carregar os clientes da API (' + API_BASE_URL + '): ' + err.message);
     return;
   }
+  document.getElementById('subtitle').textContent = CLIENTES.length + ' clientes carregados';
+  document.getElementById('totalCount').textContent = CLIENTES.length;
   montarMarcadores();
   renderList('');
 })();

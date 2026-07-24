@@ -4,4 +4,5 @@ __pycache__/
 node_modules/
 /api/bin/
 /api/mapa-clientes-api
+*.exe
 .env

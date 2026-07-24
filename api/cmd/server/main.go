@@ -130,10 +130,11 @@ func handleCadastro(db *sql.DB) http.HandlerFunc {
 		}
 
 		var lat, lon float64
+		aproximado := false
 		if req.Lat != nil && req.Lon != nil {
 			lat, lon = *req.Lat, *req.Lon
 		} else {
-			latG, lonG, achouGeo, err := core.Geocode(rua, cidade)
+			resultado, achouGeo, err := core.Geocode(rua, cidade)
 			if err != nil {
 				writeJSON(w, http.StatusBadGateway, map[string]string{"erro": "falha ao geocodificar: " + err.Error()})
 				return
@@ -148,7 +149,12 @@ func handleCadastro(db *sql.DB) http.HandlerFunc {
 				})
 				return
 			}
-			lat, lon = latG, lonG
+			lat, lon = resultado.Lat, resultado.Lon
+			// O bbox usado no Nominatim cobre o estado inteiro de SP, entao um
+			// resultado que nao cita a cidade esperada pode ser uma rua de
+			// nome parecido em outro municipio - marca como aproximado em vez
+			// de confiar cegamente.
+			aproximado = !resultado.CidadeConfere
 		}
 
 		codigo, err := core.ProximoCodigo(db)
@@ -165,7 +171,7 @@ func handleCadastro(db *sql.DB) http.HandlerFunc {
 			Bairro:     bairro,
 			Lat:        lat,
 			Lon:        lon,
-			Aproximado: false,
+			Aproximado: aproximado,
 		}
 
 		if err := core.InsereCliente(db, cliente); err != nil {

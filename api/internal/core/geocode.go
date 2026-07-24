@@ -67,13 +67,41 @@ func LimparRua(endereco string) string {
 }
 
 type nominatimResultado struct {
-	Lat string `json:"lat"`
-	Lon string `json:"lon"`
+	Lat     string `json:"lat"`
+	Lon     string `json:"lon"`
+	Address struct {
+		Cidade         string `json:"city"`
+		Municipio      string `json:"town"`
+		Municipalidade string `json:"municipality"`
+	} `json:"address"`
+}
+
+// municipio extrai o nome do municipio do resultado, testando os campos que
+// o Nominatim usa dependendo do tipo de lugar (city/town/municipality).
+func (n nominatimResultado) municipio() string {
+	for _, v := range []string{n.Address.Cidade, n.Address.Municipio, n.Address.Municipalidade} {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// ResultadoGeocode e o que o Geocode devolve quando acha alguma coisa.
+// CidadeConfere indica se o texto retornado pelo Nominatim realmente cita a
+// cidade esperada - o bbox usado cobre o estado inteiro de SP (nao so a
+// regiao metropolitana), entao em enderecos ambiguos o Nominatim as vezes
+// devolve um resultado num municipio do interior com nome de rua parecido.
+// Quando CidadeConfere for false, o chamador deve tratar como aproximado.
+type ResultadoGeocode struct {
+	Lat           float64
+	Lon           float64
+	CidadeConfere bool
 }
 
 // Geocode busca lat/lon de uma rua+cidade via Nominatim, restrito a bbox de SP.
 // Retorna ok=false se nao encontrar nada.
-func Geocode(rua, cidade string) (lat, lon float64, ok bool, err error) {
+func Geocode(rua, cidade string) (resultado ResultadoGeocode, ok bool, err error) {
 	params := url.Values{}
 	params.Set("street", rua)
 	params.Set("city", cidade)
@@ -84,6 +112,7 @@ func Geocode(rua, cidade string) (lat, lon float64, ok bool, err error) {
 	params.Set("countrycodes", "br")
 	params.Set("viewbox", viewbox)
 	params.Set("bounded", "1")
+	params.Set("addressdetails", "1")
 
 	// url.Values.Encode() usa "+" pra espaco (application/x-www-form-urlencoded),
 	// mas o Nominatim so interpreta espaco corretamente como "%20" nos campos
@@ -91,36 +120,38 @@ func Geocode(rua, cidade string) (lat, lon float64, ok bool, err error) {
 	// qualquer rua de nome parecido em outro municipio. Troca e seguro: um "+"
 	// literal nos dados originais ja teria sido escapado como "%2B" pelo Encode.
 	query := strings.ReplaceAll(params.Encode(), "+", "%20")
-	fmt.Println("DEBUG geocode url:", nominatimURL+"?"+query)
 
 	req, err := http.NewRequest(http.MethodGet, nominatimURL+"?"+query, nil)
 	if err != nil {
-		return 0, 0, false, err
+		return ResultadoGeocode{}, false, err
 	}
 	req.Header.Set("User-Agent", "mapa-clientes-api/1.0")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, 0, false, err
+		return ResultadoGeocode{}, false, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, 0, false, err
+		return ResultadoGeocode{}, false, err
 	}
 
 	var resultados []nominatimResultado
 	if err := json.Unmarshal(body, &resultados); err != nil {
-		return 0, 0, false, fmt.Errorf("resposta invalida do nominatim: %w", err)
+		return ResultadoGeocode{}, false, fmt.Errorf("resposta invalida do nominatim: %w", err)
 	}
 	if len(resultados) == 0 {
-		return 0, 0, false, nil
+		return ResultadoGeocode{}, false, nil
 	}
 
 	var latF, lonF float64
 	fmt.Sscanf(resultados[0].Lat, "%f", &latF)
 	fmt.Sscanf(resultados[0].Lon, "%f", &lonF)
-	return latF, lonF, true, nil
+
+	cidadeConfere := strings.EqualFold(resultados[0].municipio(), cidade)
+
+	return ResultadoGeocode{Lat: latF, Lon: lonF, CidadeConfere: cidadeConfere}, true, nil
 }
